@@ -22,8 +22,9 @@ class ELM(threading.Thread):
         self.start()
 
         self.reset()
-        # echo must be off for responses to be detected properly
+        # echo and spaces must be off for responses to be detected properly
         self.execute('ATE0')
+        self.execute('ATS0')
 
 
     def run(self):
@@ -50,12 +51,14 @@ class ELM(threading.Thread):
         Args:
             commands (list of str): commands to execute
             resumeMA (bool): starts ATMA command again if self._monitoring
+        Returns:
+            response to command (str): returns 'SKIPPED' if !waitForResponse
         '''
         resumeMonitoring = resumeMA and self._monitoring
         
         if resumeMonitoring:
             self.stopMonitorAll()
-        
+
         self._processing_command = True
         
         for command in commands:
@@ -63,7 +66,7 @@ class ELM(threading.Thread):
             self._serial.write(command)
             logging.debug(f"{time.time(): <18} executing {command}")
             
-            resp = self._drawResponse() if waitForResponse else None
+            resp = self._drawResponse() if waitForResponse else 'SKIPPED'
             logging.debug(f'{time.time(): <18} {command} got response {resp}')
 
         self._processing_command = False
@@ -76,9 +79,8 @@ class ELM(threading.Thread):
 
     def _process_data(self):
         '''this function is called by _recv_data thread'''
-        data = self._drawResponse()
-        if not self._processing_command:
-            # self.execute should draw the response
+        data = bytes.fromhex(self._drawResponse())
+        if not self._processing_command: # if false, self.execute should draw the response
             self._monitor_callback(data)
 
     #---------------------------------------------------------------------------
@@ -144,9 +146,8 @@ class ELM(threading.Thread):
             waitForBoot (bool): function will not return until device finishes boot
         '''
         self._monitoring = False
-        self.execute('ATWS', waitForResponse=False)
-        if waitForBoot:
-            self._drawResponse()
+        self.execute('') # stash whatever command was in progress
+        self.execute('ATWS', waitForResponse=waitForBoot)
 
     def _drawResponse(self):
         return self._recv_buffer.get()
