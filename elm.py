@@ -19,9 +19,14 @@ class ELM(threading.Thread):
         self._monitoring = False
         self._processing_command = False
         self._recv_buffer = queue.Queue()
-        self.start()
+        self._header = None
 
+        # start thread
+        self.start()
+        
+        # reset elm
         self.reset()
+
         # echo and spaces must be off for responses to be detected properly
         self.execute('ATE0')
         self.execute('ATS0')
@@ -94,11 +99,17 @@ class ELM(threading.Thread):
         self.protocol = protocol
 
     def setHeader(self, header: str):
-        '''set header for data
+        '''set header for data. if header is same as previous header, skip
+
         Args:
             header (str): header to HEX string (w/o 0x)
         '''
         header = header.replace(' ', '')
+        if header == self._header:
+            logging.debug(f'{time.time(): <18} header already set to {header}')
+            return
+        self._header = header
+
         try:
             int(header, 16)
             #TODO: check length
@@ -146,6 +157,7 @@ class ELM(threading.Thread):
             waitForBoot (bool): function will not return until device finishes boot
         '''
         self._monitoring = False
+        self._header = None
         self.execute('') # stash whatever command was in progress
         self.execute('ATWS', waitForResponse=waitForBoot)
 
