@@ -1,6 +1,7 @@
+#!/usr/bin/env python3
 import sys
 import logging
-from .elm import ELM
+from elm import ELM
 
 logging.basicConfig(level=logging.DEBUG)
 device = ELM(sys.argv[1], sys.argv[2])

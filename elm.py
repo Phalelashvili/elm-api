@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import time
 import serial
 import queue
@@ -12,7 +11,7 @@ class ELM(threading.Thread):
             serialPort (str): COMx for Windows, /dev/ttyUSBx for Unix
             baudrate (int): baudrate, duh
         '''
-        super(ELM, self).__init__()
+        super().__init__()
         self._running = True
 
         self._serial = serial.Serial(serialPort, baudrate)
@@ -104,6 +103,20 @@ class ELM(threading.Thread):
         except:
             raise Exception('Header must be HEX')
         self.execute('ATSH ' + header)
+
+    def setHeaderAndSend(self, header: str, data: str):
+        '''set header and send data
+        Args:
+            header (str): header to HEX string (w/o 0x)
+            data (str)
+        '''
+        header = header.replace(' ', '')
+        try:
+            int(header, 16)
+            #TODO: check length
+        except:
+            raise Exception('Header must be HEX')
+        self.executeMany(['ATSH ' + header, data])
 
     def monitorAll(self, callback):
         '''monitors/listens all protocols
