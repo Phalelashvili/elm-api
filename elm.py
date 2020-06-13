@@ -45,11 +45,12 @@ class ELM(threading.Thread):
             time.sleep(0.0001)
 
     def stop(self):
+        '''stops self.run thread'''
         self._running = False
 
     def execute(self, command, **kwargs):
-        '''calls self.executeMany'''
-        self.executeMany([command], **kwargs)
+        '''calls self.executeMany([command], **kwargs)'''
+        return self.executeMany([command], **kwargs)
 
     def executeMany(self, commands: list, resumeMA=True, waitForResponse=True):
         '''writes CR appended command to serial
