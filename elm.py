@@ -162,6 +162,7 @@ class ELM(threading.Thread):
         self.execute('ATWS', waitForResponse=waitForBoot)
 
     def _drawResponse(self):
+        '''Returns: next response from ELM recv buffer'''
         return self._recv_buffer.get()
 
     ### secondary AT commands ###
@@ -178,7 +179,7 @@ class ELM(threading.Thread):
         self.execute('ATAL')
 
     def setBaudrate(self, baudrate: int):
-        '''(only for STN chips) sets baudrate from PRESELECTED values
+        '''sets baudrate from PRESELECTED values
         Args:
             baudrate (int): 19200, 38400, 57600, 115200, 230400 or 500000
         '''
