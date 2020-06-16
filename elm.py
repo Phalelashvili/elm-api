@@ -27,11 +27,6 @@ class ELM(threading.Thread):
         # reset elm
         self.reset()
 
-        # echo and spaces must be off for responses to be detected properly
-        self.execute('ATE0')
-        self.execute('ATS0')
-
-
     def run(self):
         '''polls data from serial and calls _process_data'''
         while self._running:
@@ -85,7 +80,7 @@ class ELM(threading.Thread):
 
     def _process_data(self):
         '''this function is called by _recv_data thread'''
-        data = bytes.fromhex(self._drawResponse())
+        data = self._drawResponse()
         if not self._processing_command: # if false, self.execute should draw the response
             self._monitor_callback(data)
 
@@ -161,6 +156,11 @@ class ELM(threading.Thread):
         self._header = None
         self.execute('') # stash whatever command was in progress
         self.execute('ATWS', waitForResponse=waitForBoot)
+
+        # echo and spaces must be off for responses to be detected properly
+        self.execute('ATE0')
+        self.execute('ATS0')
+
 
     def _drawResponse(self):
         '''Returns: next response from ELM recv buffer'''
