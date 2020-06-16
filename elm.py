@@ -3,6 +3,8 @@ import serial
 import queue
 import logging
 import threading
+from structs import *
+
 
 class ELM(threading.Thread):
     def __init__(self, serialPort: str, baudrate=9600):
@@ -16,25 +18,42 @@ class ELM(threading.Thread):
 
         self._serial = serial.Serial(serialPort, baudrate)
         self.protocol = 0
-        self._monitoring = False
+        self.monitoring = False
         self._processing_command = False
         self._recv_buffer = queue.Queue()
         self._header = None
 
         # start thread
         self.start()
-        
+
         # reset elm
         self.reset()
 
     def run(self):
         '''polls data from serial and calls _process_data'''
+        msg = bytearray()
         while self._running:
-            # response ends with ">".            strip away \r\r>
-            data = self._serial.read_until(b'>')[:-3]
-            self._recv_buffer.put(data)
             
-            if self._monitoring:
+            try:
+                char = self._serial.read(1)
+            except:
+                if self._running:
+                    raise
+            # if we're in monitoring mode, there is no > after response
+            # messages are separated by \r
+            stopChar = b'\r' if self.monitoring else b'>'
+            msg += char
+            if char != stopChar:
+                continue
+
+            # too much data to log
+            if not self.monitoring:
+                logging.debug(f'{time.time(): <18} response {msg}')
+
+            self._recv_buffer.put(msg)
+            msg = bytearray()
+
+            if self.monitoring:
                 self._process_data()
 
             time.sleep(0.0001)
@@ -42,20 +61,22 @@ class ELM(threading.Thread):
     def stop(self):
         '''stops self.run thread'''
         self._running = False
+        self._serial.close()
 
-    def execute(self, command, **kwargs):
-        '''calls self.executeMany([command], **kwargs)'''
-        return self.executeMany([command], **kwargs)
+    def execute(self, command, resumeMA=True, waitForResponse=True, **kwargs):
+        '''calls self.executeMany with single command'''
+        return self.executeMany([command], resumeMA=resumeMA, waitForResponse=waitForResponse, **kwargs)
 
     def executeMany(self, commands: list, resumeMA=True, waitForResponse=True):
         '''writes CR appended command to serial
+
         Args:
             commands (list of str): commands to execute
-            resumeMA (bool): starts ATMA command again if self._monitoring
+            resumeMA (bool): starts ATMA command again if self.monitoring
         Returns:
             response to command (str): returns 'SKIPPED' if !waitForResponse
         '''
-        resumeMonitoring = resumeMA and self._monitoring
+        resumeMonitoring = resumeMA and self.monitoring
         
         if resumeMonitoring:
             self.stopMonitorAll()
@@ -65,13 +86,11 @@ class ELM(threading.Thread):
         for command in commands:
             command = f'{command}\r'.encode()
             self._serial.write(command)
-            logging.debug(f"{time.time(): <18} executing {command}")
+            logging.debug(f"{time.time(): <18} executing {command} ({resumeMA}, {waitForResponse})")
             
             resp = self._drawResponse() if waitForResponse else 'SKIPPED'
-            logging.debug(f'{time.time(): <18} {command} got response {resp}')
 
         self._processing_command = False
-
         if resumeMonitoring:
             self.monitorAll(self._monitor_callback)
 
@@ -81,6 +100,13 @@ class ELM(threading.Thread):
     def _process_data(self):
         '''this function is called by _recv_data thread'''
         data = self._drawResponse()
+        
+        # too much work for these messages to filter before it gets here
+        # just hardcoding filter is good enough for now
+        for i in [b'ATMA\r']:
+            if data == i:
+                return
+
         if not self._processing_command: # if false, self.execute should draw the response
             self._monitor_callback(data)
 
@@ -90,17 +116,27 @@ class ELM(threading.Thread):
     #---------------------------------------------------------------------------
 
     def setProtocol(self, protocol):
-        raise NotImplementedError()
-        #TODO
-        self.protocol = protocol
-
-    def setHeader(self, header: str):
-        '''set header for data. if header is same as previous header, skip
+        '''sets OBD protocol
 
         Args:
-            header (str): header to HEX string (w/o 0x)
+            protocol (int): value from structs.Protocol
         '''
-        header = header.replace(' ', '')
+        self.execute('ATSP' + str(protocol))
+        self.protocol = protocol
+        self._header = None
+
+    def setHeader(self, header):
+        '''set header for message. if header is same as previous header, skip
+
+        Args:
+            header (str/int): header to hexstring (w/o 0x)
+            OR int, which will be converted to hexstring
+        '''
+        if type(header) == int:
+            header = hex(header)[2:]
+        else:
+            header = header.replace(' ', '')
+
         if header == self._header:
             logging.debug(f'{time.time(): <18} header already set to {header}')
             return
@@ -113,19 +149,40 @@ class ELM(threading.Thread):
             raise Exception('Header must be HEX')
         self.execute('ATSH ' + header)
 
-    def setHeaderAndSend(self, header: str, data: str):
-        '''set header and send data
+    def setHeaderAndSend(self, header: str, message: str):
+        '''set header and send message
         Args:
-            header (str): header to HEX string (w/o 0x)
-            data (str)
+            header (str): header to hexstring (w/o 0x)
+            message (str): header to hexstring (w/o 0x)
         '''
         header = header.replace(' ', '')
         try:
             int(header, 16)
             #TODO: check length
         except:
-            raise Exception('Header must be HEX')
-        self.executeMany(['ATSH ' + header, data])
+            raise Exception('Header must be hexstring')
+        self.executeMany(['ATSH ' + header, message])
+
+    def send(self, message: str):
+        '''sends message to vehicle.
+        use setProtocol and setHeader before sending
+        
+        Args:
+            message (str): header to hexstring (w/o 0x)
+        Returns:
+            bool: can't tell if message was successfully sent
+            when auto-receive is disabled. returns True if 
+            elm understood message (didn't send questionmark) 
+        '''
+        try:
+            int(message, 16)
+            #TODO: check length
+        except:
+            raise Exception('Message must be hexstring')
+
+        if b'?' in self.execute(message):
+            return False
+        return True
 
     def monitorAll(self, callback):
         '''monitors/listens all protocols
@@ -134,16 +191,20 @@ class ELM(threading.Thread):
         '''
         self._monitor_callback = callback
 
-        if self._monitoring:
-            logging.warning('ATMA already running, skipping execution')
+        if self.monitoring:
+            logging.debug('ATMA already running, skipping execution')
             return
-        self.execute('ATMA', waitForResponse=False)
-        self._monitoring = True
+
+        self.monitoring = True
+        self.execute('ATMA', resumeMA=False, waitForResponse=False)
 
     def stopMonitorAll(self):
         '''stops ATMA command'''
-        self._monitoring = False
         
+        # this should be set to false before executing
+        # so that self.run will know what to expect from response
+        self.monitoring = False
+
         # any len(command) > 1 will cancel ATMA
         self.execute('', resumeMA=False)
 
@@ -152,14 +213,18 @@ class ELM(threading.Thread):
         Args:
             waitForBoot (bool): function will not return until device finishes boot
         '''
-        self._monitoring = False
+        self.monitoring = False
         self._header = None
-        self.execute('') # stash whatever command was in progress
+        self.execute(' ') # stash command in progress if any
+        #NOTE: do not send just \r. that means executing previous command
+
         self.execute('ATWS', waitForResponse=waitForBoot)
 
-        # echo and spaces must be off for responses to be detected properly
-        self.execute('ATE0')
+        # spaces must be off for responses to be detected properly
         self.execute('ATS0')
+        # automatic responses slow communication down.
+        # use self.monitorAll for receiving messages
+        self.execute('ATR0')
 
 
     def _drawResponse(self):
