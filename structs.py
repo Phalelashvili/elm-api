@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+
 @dataclass
 class Protocols:
     AUTO = 0 # Automatic
@@ -18,3 +19,16 @@ class Protocols:
     KWP2000_SLOW = ISO14230_4_SLOW
     KWP2000_FAST = ISO14230_4_FAST
     CAN          = ISO15765_4_500KBPS_EXTENDED
+
+
+# some baudrates are missing (?)
+@dataclass
+class Baudrates:
+    # _ bc variable names can't be numbers
+    _19200   = 'D0'
+    _38400   = '68'
+    _57600   = '45'
+    _115200  = '23'
+    _230400  = '11'
+    _500000  = '08'
+    _2000000 = '02'

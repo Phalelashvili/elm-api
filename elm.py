@@ -6,9 +6,17 @@ import threading
 from structs import *
 
 
+#   TODO: huge performance boost
+#   tasks requiring more than 1 command can be sped up by
+#   not sending every command separately. instead, buffer commands
+#   and once every required command is in the buffer, send them together
+#   this will minimize the communication delay between pc and elm
+#   responses would have to go through some processing as well
+
+
 class ELM(threading.Thread):
     def __init__(self, serialPort: str, baudrate=9600):
-        '''initialize serial connection
+        '''initialize class and serial connection
         Args:
             serialPort (str): COMx for Windows, /dev/ttyUSBx for Unix
             baudrate (int): baudrate, duh
@@ -108,7 +116,7 @@ class ELM(threading.Thread):
                 return
 
         if not self._processing_command: # if false, self.execute should draw the response
-            self._monitor_callback(data)
+            self._monitor_callback(bytes(data[:-1]))
 
     #---------------------------------------------------------------------------
     # AT Commands
@@ -129,7 +137,7 @@ class ELM(threading.Thread):
         '''set header for message. if header is same as previous header, skip
 
         Args:
-            header (str/int): header to hexstring (w/o 0x)
+            header (str/int): header in hexstring (w/o 0x)
             OR int, which will be converted to hexstring
         '''
         if type(header) == int:
@@ -174,6 +182,7 @@ class ELM(threading.Thread):
             when auto-receive is disabled. returns True if 
             elm understood message (didn't send questionmark) 
         '''
+        message = message.replace(' ', '')
         try:
             int(message, 16)
             #TODO: check length
@@ -200,7 +209,6 @@ class ELM(threading.Thread):
 
     def stopMonitorAll(self):
         '''stops ATMA command'''
-        
         # this should be set to false before executing
         # so that self.run will know what to expect from response
         self.monitoring = False
@@ -247,22 +255,9 @@ class ELM(threading.Thread):
     def setBaudrate(self, baudrate: int):
         '''sets baudrate from PRESELECTED values
         Args:
-            baudrate (int): 19200, 38400, 57600, 115200, 230400 or 500000
+            baudrate (Structs.Baudrates)
         '''
-        mapping = {
-            # missing baudrates
-            19200   : 'D0',
-            38400   : '68',
-            57600   : '45',
-            115200  : '23',
-            230400  : '11',
-            500000  : '08',
-            2000000 : '02'
-        }
-        
-        if baudrate not in mapping:
-            raise Exception('Invalid baudrate')
 
-        self.execute('ATPP 0C SV '+ mapping.get(baudrate))
+        self.execute(f'ATPP 0C SV {baudrate}')
         self.execute('ATPP 0C ON')
         self.reset()
