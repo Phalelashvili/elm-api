@@ -6,14 +6,6 @@ import threading
 from structs import *
 
 
-#   TODO: huge performance boost
-#   tasks requiring more than 1 command can be sped up by
-#   not sending every command separately. instead, buffer commands
-#   and once every required command is in the buffer, send them together
-#   this will minimize the communication delay between pc and elm
-#   responses would have to go through some processing as well
-
-
 class ELM(threading.Thread):
     def __init__(self, serialPort: str, baudrate=9600):
         '''initialize class and serial connection
@@ -116,7 +108,7 @@ class ELM(threading.Thread):
                 return
 
         if not self._processing_command: # if false, self.execute should draw the response
-            self._monitor_callback(bytes(data[:-1]))
+            self._monitor_callback(data[:-1])
 
     #---------------------------------------------------------------------------
     # AT Commands
@@ -197,6 +189,11 @@ class ELM(threading.Thread):
         '''monitors/listens all protocols
         Args:
             callback (fn): function to be called on new data
+        Callback:
+            each message received from ATMA command
+            takes single argument, passes byte encoded message
+            separated by spaces like 123 01 02 03 04 05 
+            (header and msg indexes depend on protocol)
         '''
         self._monitor_callback = callback
 
@@ -227,13 +224,6 @@ class ELM(threading.Thread):
         #NOTE: do not send just \r. that means executing previous command
 
         self.execute('ATWS', waitForResponse=waitForBoot)
-
-        # spaces must be off for responses to be detected properly
-        self.execute('ATS0')
-        # automatic responses slow communication down.
-        # use self.monitorAll for receiving messages
-        self.execute('ATR0')
-
 
     def _drawResponse(self):
         '''Returns: next response from ELM recv buffer'''
