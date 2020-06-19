@@ -170,9 +170,9 @@ class ELM(threading.Thread):
         Args:
             message (str): header to hexstring (w/o 0x)
         Returns:
-            bool: can't tell if message was successfully sent
-            when auto-receive is disabled. returns True if 
-            elm understood message (didn't send questionmark) 
+            bool: True if msg was sent successfully.
+            if auto-receive is disabled. returns True when 
+            elm doesn't send questionmark 
         '''
         message = message.replace(' ', '')
         try:
@@ -181,7 +181,8 @@ class ELM(threading.Thread):
         except:
             raise Exception('Message must be hexstring')
 
-        if b'?' in self.execute(message):
+        r = self.execute(message)
+        if b'?' in r or b'ERROR' in r:
             return False
         return True
 
@@ -237,6 +238,13 @@ class ELM(threading.Thread):
             state (bool): True or False
         '''
         self.execute(f'ATH{int(state)}')
+
+    def setAutoReceive(self, state: int):
+        '''set automatic receive (on by default)
+        Args:
+            state (bool): True or False
+        '''
+        self.execute(f'ATR{int(state)}')
 
     def allowLongMessages(self):
         '''Allow Long (>7 byte) messages'''
