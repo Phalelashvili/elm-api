@@ -29,6 +29,9 @@ class ELM(threading.Thread):
         # reset elm
         self.reset()
 
+        # ELM allows 1 byte storage, FF by default
+        self.dataByte = self.execute('AT RD').decode().split('\r')[1]
+
     def run(self):
         '''polls data from serial and calls _process_data'''
         msg = bytearray()
@@ -108,7 +111,7 @@ class ELM(threading.Thread):
                 return
 
         if not self._processing_command: # if false, self.execute should draw the response
-            self._monitor_callback(data[:-1])
+            self._monitor_callback(data[:-2])
 
     #---------------------------------------------------------------------------
     # AT Commands
@@ -155,12 +158,27 @@ class ELM(threading.Thread):
             header (str): header to hexstring (w/o 0x)
             message (str): header to hexstring (w/o 0x)
         '''
-        header = header.replace(' ', '')
+        if type(header) == int:
+            header = hex(header)[2:]
+        else:
+            header = header.replace(' ', '')
+
+        if header == self._header:
+            logging.debug(f'{time.time(): <18} header already set to {header}')
+
         try:
             int(header, 16)
             #TODO: check length
         except:
-            raise Exception('Header must be hexstring')
+            raise Exception('Header must be HEX')
+
+        message = message.replace(' ', '')
+        try:
+            int(message, 16)
+            #TODO: check length
+        except:
+            raise Exception('Message must be hexstring')
+
         self.executeMany(['ATSH ' + header, message])
 
     def send(self, message: str):
@@ -171,8 +189,7 @@ class ELM(threading.Thread):
             message (str): header to hexstring (w/o 0x)
         Returns:
             bool: True if msg was sent successfully.
-            if auto-receive is disabled. returns True when 
-            elm doesn't send questionmark 
+            (when elm doesn't send questionmark or error) 
         '''
         message = message.replace(' ', '')
         try:
