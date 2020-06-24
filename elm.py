@@ -67,10 +67,10 @@ class ELM(threading.Thread):
         self._serial.close()
 
     def execute(self, command, resumeMA=True, waitForResponse=True, **kwargs):
-        '''calls self.executeMany with single command'''
-        return self.executeMany([command], resumeMA=resumeMA, waitForResponse=waitForResponse, **kwargs)
+        '''calls self.execute_many with single command'''
+        return self.execute_many([command], resumeMA=resumeMA, waitForResponse=waitForResponse, **kwargs)
 
-    def executeMany(self, commands: list, resumeMA=True, waitForResponse=True):
+    def execute_many(self, commands: list, resumeMA=True, waitForResponse=True):
         '''writes CR appended command to serial
 
         Args:
@@ -79,10 +79,10 @@ class ELM(threading.Thread):
         Returns:
             response to command (str): returns 'SKIPPED' if !waitForResponse
         '''
-        resumeMonitoring = resumeMA and self.monitoring
+        resume_monitoring = resumeMA and self.monitoring
         
-        if resumeMonitoring:
-            self.stopMonitorAll()
+        if resume_monitoring:
+            self.stop_monitor_all()
 
         self._processing_command = True
         
@@ -91,18 +91,18 @@ class ELM(threading.Thread):
             self._serial.write(command)
             logging.debug(f"{time.time(): <18} executing {command} ({resumeMA}, {waitForResponse})")
             
-            resp = self._drawResponse() if waitForResponse else 'SKIPPED'
+            resp = self._draw_response() if waitForResponse else 'SKIPPED'
 
         self._processing_command = False
-        if resumeMonitoring:
-            self.monitorAll(self._monitor_callback)
+        if resume_monitoring:
+            self.monitor_all(self._monitor_callback)
 
         return resp
 
 
     def _process_data(self):
         '''this function is called by _recv_data thread'''
-        data = self._drawResponse()
+        data = self._draw_response()
         
         # too much work for these messages to filter before it gets here
         # just hardcoding filter is good enough for now
@@ -118,7 +118,7 @@ class ELM(threading.Thread):
     # https://www.elmelectronics.com/wp-content/uploads/2016/07/ELM327DS.pdf
     #---------------------------------------------------------------------------
 
-    def setProtocol(self, protocol):
+    def set_protocol(self, protocol):
         '''sets OBD protocol
 
         Args:
@@ -128,7 +128,7 @@ class ELM(threading.Thread):
         self.protocol = protocol
         self._header = None
 
-    def setHeader(self, header):
+    def set_header(self, header):
         '''set header for message. if header is same as previous header, skip
 
         Args:
@@ -152,7 +152,7 @@ class ELM(threading.Thread):
             raise Exception('Header must be HEX')
         self.execute('ATSH ' + header)
 
-    def setHeaderAndSend(self, header: str, message: str):
+    def send_with_header(self, header: str, message: str):
         '''set header and send message
         Args:
             header (str): header to hexstring (w/o 0x)
@@ -179,11 +179,11 @@ class ELM(threading.Thread):
         except:
             raise Exception('Message must be hexstring')
 
-        self.executeMany(['ATSH ' + header, message])
+        self.execute_many(['ATSH ' + header, message])
 
     def send(self, message: str):
         '''sends message to vehicle.
-        use setProtocol and setHeader before sending
+        use set_protocol and set_header before sending
         
         Args:
             message (str): header to hexstring (w/o 0x)
@@ -203,7 +203,7 @@ class ELM(threading.Thread):
             return False
         return True
 
-    def monitorAll(self, callback):
+    def monitor_all(self, callback):
         '''monitors/listens all protocols
         Args:
             callback (fn): function to be called on new data
@@ -222,7 +222,7 @@ class ELM(threading.Thread):
         self.monitoring = True
         self.execute('ATMA', resumeMA=False, waitForResponse=False)
 
-    def stopMonitorAll(self):
+    def stop_monitor_all(self):
         '''stops ATMA command'''
         # this should be set to false before executing
         # so that self.run will know what to expect from response
@@ -243,31 +243,31 @@ class ELM(threading.Thread):
 
         self.execute('ATWS', waitForResponse=waitForBoot)
 
-    def _drawResponse(self):
+    def _draw_response(self):
         '''Returns: next response from ELM recv buffer'''
         return self._recv_buffer.get()
 
     ### secondary AT commands ###
 
-    def setHeaderState(self, state: int):
+    def set_header_state(self, state: int):
         '''printing of headers off*, or on
         Args:
             state (bool): True or False
         '''
         self.execute(f'ATH{int(state)}')
 
-    def setAutoReceive(self, state: int):
+    def set_auto_receive(self, state: int):
         '''set automatic receive (on by default)
         Args:
             state (bool): True or False
         '''
         self.execute(f'ATR{int(state)}')
 
-    def allowLongMessages(self):
+    def allow_long_messages(self):
         '''Allow Long (>7 byte) messages'''
         self.execute('ATAL')
 
-    def setBaudrate(self, baudrate: int):
+    def set_baudrate(self, baudrate: int):
         '''sets baudrate from PRESELECTED values
         Args:
             baudrate (Structs.Baudrates)
