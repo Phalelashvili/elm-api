@@ -22,6 +22,7 @@ class ELM(threading.Thread):
         self._processing_command = False
         self._recv_buffer = queue.Queue()
         self._header = None
+        self.dataByte = '--'
 
         # start thread
         self.start()
@@ -89,7 +90,7 @@ class ELM(threading.Thread):
         for command in commands:
             command = f'{command}\r'.encode()
             self._serial.write(command)
-            logging.debug(f"{time.time(): <18} executing {command} ({resumeMA}, {waitForResponse})")
+            logging.debug(f"{time.time(): <18} {self.dataByte} executing {command} ({resumeMA}, {waitForResponse})")
             
             resp = self._draw_response() if waitForResponse else 'SKIPPED'
 
