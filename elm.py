@@ -5,6 +5,7 @@ import logging
 import threading
 from structs import *
 
+logger = logging.getLogger("OBD")
 
 class ELM(threading.Thread):
     def __init__(self, serialPort: str, baudrate=9600):
