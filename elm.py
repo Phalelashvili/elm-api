@@ -23,7 +23,7 @@ class ELM(threading.Thread):
         self._processing_command = False
         self._recv_buffer = queue.Queue()
         self._header = None
-        self.dataByte = '--'
+        self.data_byte = '--'
 
         # start thread
         self.start()
@@ -32,7 +32,7 @@ class ELM(threading.Thread):
         self.reset()
 
         # ELM allows 1 byte storage, FF by default
-        self.dataByte = self.execute('AT RD').decode().split('\r')[1]
+        self.data_byte = self.execute('AT RD').decode().split('\r')[1]
 
     def run(self):
         '''polls data from serial and calls _process_data'''
@@ -68,18 +68,18 @@ class ELM(threading.Thread):
         self._running = False
         self._serial.close()
 
-    def execute(self, command, resumeMA=True, waitForResponse=True, **kwargs):
+    def execute(self, command, resumeMA=True, wait_for_response=True, **kwargs):
         '''calls self.execute_many with single command'''
-        return self.execute_many([command], resumeMA=resumeMA, waitForResponse=waitForResponse, **kwargs)
+        return self.execute_many([command], resumeMA=resumeMA, wait_for_response=wait_for_response, **kwargs)
 
-    def execute_many(self, commands: list, resumeMA=True, waitForResponse=True):
+    def execute_many(self, commands: list, resumeMA=True, wait_for_response=True):
         '''writes CR appended command to serial
 
         Args:
             commands (list of str): commands to execute
             resumeMA (bool): starts ATMA command again if self.monitoring
         Returns:
-            response to command (str): returns 'SKIPPED' if !waitForResponse
+            response to command (str): returns 'SKIPPED' if !wait_for_response
         '''
         resume_monitoring = resumeMA and self.monitoring
         
@@ -91,9 +91,9 @@ class ELM(threading.Thread):
         for command in commands:
             command = f'{command}\r'.encode()
             self._serial.write(command)
-            logging.debug(f"{time.time(): <18} {self.dataByte} executing {command} ({resumeMA}, {waitForResponse})")
+            logging.debug(f"{time.time(): <18} {self.data_byte} executing {command} ({resumeMA}, {wait_for_response})")
             
-            resp = self._draw_response() if waitForResponse else 'SKIPPED'
+            resp = self._draw_response() if wait_for_response else 'SKIPPED'
 
         self._processing_command = False
         if resume_monitoring:
@@ -222,7 +222,7 @@ class ELM(threading.Thread):
             return
 
         self.monitoring = True
-        self.execute('ATMA', resumeMA=False, waitForResponse=False)
+        self.execute('ATMA', resumeMA=False, wait_for_response=False)
 
     def stop_monitor_all(self):
         '''stops ATMA command'''
@@ -233,17 +233,17 @@ class ELM(threading.Thread):
         # any len(command) > 1 will cancel ATMA
         self.execute('', resumeMA=False)
 
-    def reset(self, waitForBoot=True):
+    def reset(self, wait_for_boot=True):
         '''resets elm device from software
         Args:
-            waitForBoot (bool): function will not return until device finishes boot
+            wait_for_boot (bool): function will not return until device finishes boot
         '''
         self.monitoring = False
         self._header = None
         self.execute(' ') # stash command in progress if any
         #NOTE: do not send just \r. that means executing previous command
 
-        self.execute('ATWS', waitForResponse=waitForBoot)
+        self.execute('ATWS', wait_for_response=wait_for_boot)
 
     def _draw_response(self):
         '''Returns: next response from ELM recv buffer'''
@@ -278,3 +278,8 @@ class ELM(threading.Thread):
         self.execute(f'ATPP 0C SV {baudrate}')
         self.execute('ATPP 0C ON')
         self.reset()
+    
+    def save_data_byte(self, data_byte: str):
+        '''it's self-explanatory'''
+        self.data_byte = data_byte
+        return self.execute(f'AT SD {data_byte}')
