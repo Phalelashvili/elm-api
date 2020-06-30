@@ -1,2 +1,2 @@
 from .elm import ELM
-from structs import *
+from .structs import *

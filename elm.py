@@ -3,7 +3,7 @@ import serial
 import queue
 import logging
 import threading
-from structs import *
+from .structs import *
 
 logger = logging.getLogger("OBD")
 
