@@ -38,7 +38,7 @@ class ELM(threading.Thread):
         '''polls data from serial and calls _process_data'''
         msg = bytearray()
         while self._running:
-            
+
             try:
                 char = self._serial.read(1)
             except:
@@ -82,17 +82,17 @@ class ELM(threading.Thread):
             response to command (str): returns 'SKIPPED' if !wait_for_response
         '''
         resume_monitoring = resumeMA and self.monitoring
-        
+
         if resume_monitoring:
             self.stop_monitor_all()
 
         self._processing_command = True
-        
+
         for command in commands:
             command = f'{command}\r'.encode()
             self._serial.write(command)
             logging.debug(f"{time.time(): <18} {self.data_byte} executing {command} ({resumeMA}, {wait_for_response})")
-            
+
             resp = self._draw_response() if wait_for_response else 'SKIPPED'
 
         self._processing_command = False
@@ -105,7 +105,7 @@ class ELM(threading.Thread):
     def _process_data(self):
         '''this function is called by _recv_data thread'''
         data = self._draw_response()
-        
+
         # too much work for these messages to filter before it gets here
         # just hardcoding filter is good enough for now
         for i in [b'ATMA\r']:
@@ -186,12 +186,12 @@ class ELM(threading.Thread):
     def send(self, message: str):
         '''sends message to vehicle.
         use set_protocol and set_header before sending
-        
+
         Args:
             message (str): header to hexstring (w/o 0x)
         Returns:
             bool: True if msg was sent successfully.
-            (when elm doesn't send questionmark or error) 
+            (when elm doesn't send questionmark or error)
         '''
         message = message.replace(' ', '')
         try:
@@ -212,7 +212,7 @@ class ELM(threading.Thread):
         Callback:
             each message received from ATMA command
             takes single argument, passes byte encoded message
-            separated by spaces like 123 01 02 03 04 05 
+            separated by spaces like 123 01 02 03 04 05
             (header and msg indexes depend on protocol)
         '''
         self._monitor_callback = callback
@@ -240,7 +240,7 @@ class ELM(threading.Thread):
         '''
         self.monitoring = False
         self._header = None
-        self.execute(' ') # stash command in progress if any
+        self.execute('') # stash command in progress if any
         #NOTE: do not send just \r. that means executing previous command
 
         self.execute('ATWS', wait_for_response=wait_for_boot)
@@ -278,7 +278,7 @@ class ELM(threading.Thread):
         self.execute(f'ATPP 0C SV {baudrate}')
         self.execute('ATPP 0C ON')
         self.reset()
-    
+
     def save_data_byte(self, data_byte: str):
         '''it's self-explanatory'''
         self.data_byte = data_byte
