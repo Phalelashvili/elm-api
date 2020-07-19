@@ -3,24 +3,26 @@ import serial
 import queue
 import logging
 import threading
-from .structs import *
 
 logger = logging.getLogger("OBD")
 
+
 class ELM(threading.Thread):
-    def __init__(self, serialPort: str, baudrate=9600):
+
+    def __init__(self, serial_port: str, baudrate=9600):
         """initialize class and serial connection
         Args:
-            serialPort (str): COMx for Windows, /dev/ttyUSBx for Unix
+            serial_port (str): COMx for Windows, /dev/ttyUSBx for Unix
             baudrate (int): baudrate, duh
         """
         super().__init__()
         self._running = True
 
-        self._serial = serial.Serial(serialPort, baudrate)
+        self._serial = serial.Serial(serial_port, baudrate)
         self.protocol = 0
         self.monitoring = False
         self._processing_command = False
+        self._monitor_callback = None
         self._recv_buffer = queue.Queue()
         self._header = None
         self.data_byte = '--'
@@ -46,9 +48,9 @@ class ELM(threading.Thread):
                     raise
             # if we're in monitoring mode, there is no > after response
             # messages are separated by \r
-            stopChar = b'\r' if self.monitoring else b'>'
+            stop_char = b'\r' if self.monitoring else b'>'
             msg += char
-            if char != stopChar:
+            if char != stop_char:
                 continue
 
             # too much data to log
@@ -68,20 +70,21 @@ class ELM(threading.Thread):
         self._running = False
         self._serial.close()
 
-    def execute(self, command, resumeMA=True, wait_for_response=True, **kwargs):
+    def execute(self, command, resume_ma=True, wait_for_response=True):
         """calls self.execute_many with single command"""
-        return self.execute_many([command], resumeMA=resumeMA, wait_for_response=wait_for_response, **kwargs)
+        return self.execute_many([command], resume_ma=resume_ma, wait_for_response=wait_for_response)
 
-    def execute_many(self, commands: list, resumeMA=True, wait_for_response=True):
+    def execute_many(self, commands: list, resume_ma=True, wait_for_response=True):
         """writes CR appended command to serial
 
         Args:
             commands (list of str): commands to execute
-            resumeMA (bool): starts ATMA command again if self.monitoring
+            resume_ma (bool): starts ATMA command again if self.monitoring
+            wait_for_response (bool): do not continue execution until we get response
         Returns:
-            response to command (str): returns 'SKIPPED' if !wait_for_response
+            response to command (bytes): returns 'SKIPPED' if !wait_for_response
         """
-        resume_monitoring = resumeMA and self.monitoring
+        resume_monitoring = resume_ma and self.monitoring
 
         if resume_monitoring:
             self.stop_monitor_all()
@@ -91,7 +94,7 @@ class ELM(threading.Thread):
         for command in commands:
             command = f'{command}\r'.encode()
             self._serial.write(command)
-            logging.debug(f"{time.time(): <18} {self.data_byte} executing {command} ({resumeMA}, {wait_for_response})")
+            logging.debug(f"{time.time(): <18} {self.data_byte} executing {command} ({resume_ma}, {wait_for_response})")
 
             resp = self._draw_response() if wait_for_response else 'SKIPPED'
 
@@ -101,24 +104,27 @@ class ELM(threading.Thread):
 
         return resp
 
-
     def _process_data(self):
         """this function is called by _recv_data thread"""
         data = self._draw_response()
 
         # too much work for these messages to filter before it gets here
-        # just hardcoding filter is good enough for now
+        # just hard-coding filter is good enough for now
         for i in [b'ATMA\r']:
             if data == i:
                 return
 
-        if not self._processing_command: # if false, self.execute should draw the response
+        if not self._processing_command:  # if false, self.execute should draw the response
             self._monitor_callback(data[:-2])
 
-    #---------------------------------------------------------------------------
+    def close(self):
+        """closes serial communication"""
+        self._serial.close()
+
+    # ---------------------------------------------------------------------------
     # AT Commands
     # https://www.elmelectronics.com/wp-content/uploads/2016/07/ELM327DS.pdf
-    #---------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
 
     def set_protocol(self, protocol):
         """sets OBD protocol
@@ -134,8 +140,8 @@ class ELM(threading.Thread):
         """set header for message. if header is same as previous header, skip
 
         Args:
-            header (str/int): header in hexstring (w/o 0x)
-            OR int, which will be converted to hexstring
+            header (str/int): header in hex-string (w/o 0x)
+            OR int, which will be converted to hex-string
         """
         if type(header) == int:
             header = hex(header)[2:]
@@ -149,16 +155,17 @@ class ELM(threading.Thread):
 
         try:
             int(header, 16)
-            #TODO: check length
+            # TODO: check length
         except:
             raise Exception('Header must be HEX')
         self.execute('ATSH ' + header)
 
     def send_with_header(self, header: str, message: str):
         """set header and send message
+
         Args:
-            header (str): header to hexstring (w/o 0x)
-            message (str): header to hexstring (w/o 0x)
+            header (str/int): header in hex-string (w/o 0x)
+            message (str): message in hex-string (w/o 0x)
         """
         if type(header) == int:
             header = hex(header)[2:]
@@ -170,16 +177,16 @@ class ELM(threading.Thread):
 
         try:
             int(header, 16)
-            #TODO: check length
+            # TODO: check length
         except:
             raise Exception('Header must be HEX')
 
         message = message.replace(' ', '')
         try:
             int(message, 16)
-            #TODO: check length
+            # TODO: check length
         except:
-            raise Exception('Message must be hexstring')
+            raise Exception('Message must be hex-string')
 
         self.execute_many(['ATSH ' + header, message])
 
@@ -188,17 +195,17 @@ class ELM(threading.Thread):
         use set_protocol and set_header before sending
 
         Args:
-            message (str): header to hexstring (w/o 0x)
+            message (str): header to hex-string (w/o 0x)
         Returns:
             bool: True if msg was sent successfully.
-            (when elm doesn't send questionmark or error)
+            (when elm doesn't send "?" or error)
         """
         message = message.replace(' ', '')
         try:
             int(message, 16)
-            #TODO: check length
+            # TODO: check length
         except:
-            raise Exception('Message must be hexstring')
+            raise Exception('Message must be hex-string')
 
         r = self.execute(message)
         if b'?' in r or b'ERROR' in r:
@@ -222,7 +229,7 @@ class ELM(threading.Thread):
             return
 
         self.monitoring = True
-        self.execute('ATMA', resumeMA=False, wait_for_response=False)
+        self.execute('ATMA', resume_ma=False, wait_for_response=False)
 
     def stop_monitor_all(self):
         """stops ATMA command"""
@@ -231,7 +238,7 @@ class ELM(threading.Thread):
         self.monitoring = False
 
         # any len(command) > 1 will cancel ATMA
-        self.execute('', resumeMA=False)
+        self.execute('', resume_ma=False)
 
     def reset(self, wait_for_boot=True):
         """resets elm device from software
@@ -240,8 +247,8 @@ class ELM(threading.Thread):
         """
         self.monitoring = False
         self._header = None
-        self.execute('') # stash command in progress if any
-        #NOTE: do not send just \r. that means executing previous command
+        self.execute('')  # stash command in progress if any
+        # NOTE: do not send just \r. that means executing previous command
 
         self.execute('ATWS', wait_for_response=wait_for_boot)
 
