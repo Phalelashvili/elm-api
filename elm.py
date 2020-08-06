@@ -242,6 +242,7 @@ class ELM(threading.Thread):
 
     def reset(self, wait_for_boot=True):
         """resets elm device from software
+
         Args:
             wait_for_boot (bool): function will not return until device finishes boot
         """
@@ -256,7 +257,9 @@ class ELM(threading.Thread):
         """Returns: next response from ELM recv buffer"""
         return self._recv_buffer.get()
 
-    ### secondary AT commands ###
+    # ---------------------------------------------------------------------------
+    # secondary AT commands
+    # ---------------------------------------------------------------------------
 
     def set_header_state(self, state: int):
         """printing of headers off*, or on
