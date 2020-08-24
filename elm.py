@@ -237,9 +237,9 @@ class ELM(threading.Thread):
         # so that self.run will know what to expect from response
         self.monitoring = False
 
-        # any len(command) > 1 will cancel ATMA
+        # any command with length >= 1 will cancel ATMA
         self.execute('', resume_ma=False)
-
+ 
     def reset(self, wait_for_boot=True):
         """resets elm device from software
 
@@ -248,7 +248,7 @@ class ELM(threading.Thread):
         """
         self.monitoring = False
         self._header = None
-        self.execute('')  # stash command in progress if any
+        self.execute(' ')  # stash command in progress if any
         # NOTE: do not send just \r. that means executing previous command
 
         self.execute('ATWS', wait_for_response=wait_for_boot)
@@ -287,7 +287,8 @@ class ELM(threading.Thread):
 
         self.execute(f'ATPP 0C SV {baudrate}')
         self.execute('ATPP 0C ON')
-        self.reset()
+        self.execute('ATZ')  # hard reset
+        # self.reset()
 
     def save_data_byte(self, data_byte: str):
         """it's self-explanatory"""
