@@ -1,4 +1,5 @@
 import time
+from typing import List, Union
 import serial
 import queue
 import logging
@@ -40,12 +41,12 @@ class ELM(threading.Thread):
         """polls data from serial and calls _process_data"""
         msg = bytearray()
         while self._running:
-
             try:
                 char = self._serial.read(1)
             except:
                 if self._running:
                     raise
+                return
             # if we're in monitoring mode, there is no > after response
             # messages are separated by \r
             stop_char = b'\r' if self.monitoring else b'>'
@@ -70,11 +71,11 @@ class ELM(threading.Thread):
         self._running = False
         self._serial.close()
 
-    def execute(self, command, resume_ma=True, wait_for_response=True):
+    def execute(self, command, resume_ma=True, wait_for_response=True) -> bytes:
         """calls self.execute_many with single command"""
         return self.execute_many([command], resume_ma=resume_ma, wait_for_response=wait_for_response)
 
-    def execute_many(self, commands: list, resume_ma=True, wait_for_response=True):
+    def execute_many(self, commands: List[str], resume_ma=True, wait_for_response=True) -> bytes:
         """writes CR appended command to serial
 
         Args:
@@ -91,6 +92,7 @@ class ELM(threading.Thread):
 
         self._processing_command = True
 
+        resp = bytes()
         for command in commands:
             command = f'{command}\r'.encode()
             self._serial.write(command)
@@ -104,7 +106,7 @@ class ELM(threading.Thread):
 
         return resp
 
-    def _process_data(self):
+    def _process_data(self) -> None:
         """this function is called by _recv_data thread"""
         data = self._draw_response()
 
@@ -126,7 +128,7 @@ class ELM(threading.Thread):
     # https://www.elmelectronics.com/wp-content/uploads/2016/07/ELM327DS.pdf
     # ---------------------------------------------------------------------------
 
-    def set_protocol(self, protocol):
+    def set_protocol(self, protocol) -> None:
         """sets OBD protocol
 
         Args:
@@ -136,7 +138,7 @@ class ELM(threading.Thread):
         self.protocol = protocol
         self._header = None
 
-    def set_header(self, header):
+    def set_header(self, header) -> None:
         """set header for message. if header is same as previous header, skip
 
         Args:
@@ -160,12 +162,12 @@ class ELM(threading.Thread):
             raise Exception('Header must be HEX')
         self.execute('ATSH ' + header)
 
-    def send_with_header(self, header: str, message: str):
+    def send_with_header(self, header: Union[str, int], message: str) -> None:
         """set header and send message
 
         Args:
-            header (str/int): header in hex-string (w/o 0x)
-            message (str): message in hex-string (w/o 0x)
+            header (Union[str, int]): can be HEX value of header or hex-string (without "0x")
+            message (str): hex-string of message (without "0x")
         """
         if type(header) == int:
             header = hex(header)[2:]
@@ -190,7 +192,7 @@ class ELM(threading.Thread):
 
         self.execute_many(['ATSH ' + header, message])
 
-    def send(self, message: str):
+    def send(self, message: str) -> bool:
         """sends message to vehicle.
         use set_protocol and set_header before sending
 
@@ -212,7 +214,7 @@ class ELM(threading.Thread):
             return False
         return True
 
-    def monitor_all(self, callback):
+    def monitor_all(self, callback) -> None:
         """monitors/listens all protocols
         Args:
             callback (fn): function to be called on new data
@@ -240,7 +242,7 @@ class ELM(threading.Thread):
         # any command with length >= 1 will cancel ATMA
         self.execute('', resume_ma=False)
  
-    def reset(self, wait_for_boot=True):
+    def reset(self, wait_for_boot=True) -> None:
         """resets elm device from software
 
         Args:
@@ -253,33 +255,33 @@ class ELM(threading.Thread):
 
         self.execute('ATWS', wait_for_response=wait_for_boot)
 
-    def _draw_response(self):
-        """Returns: next response from ELM recv buffer"""
-        return self._recv_buffer.get()
-
-    # ---------------------------------------------------------------------------
-    # secondary AT commands
-    # ---------------------------------------------------------------------------
-
-    def set_header_state(self, state: int):
+    def set_header_state(self, state: int) -> None:
         """printing of headers off*, or on
         Args:
             state (bool): True or False
         """
         self.execute(f'ATH{int(state)}')
 
-    def set_auto_receive(self, state: int):
+    # ---------------------------------------------------------------------------
+    # secondary AT commands
+    # ---------------------------------------------------------------------------
+
+    def _draw_response(self) -> bytes:
+        """Returns: next response from ELM recv buffer"""
+        return self._recv_buffer.get()
+
+    def set_auto_receive(self, state: int) -> None:
         """set automatic receive (on by default)
         Args:
             state (bool): True or False
         """
         self.execute(f'ATR{int(state)}')
 
-    def allow_long_messages(self):
+    def allow_long_messages(self) -> None:
         """Allow Long (>7 byte) messages"""
         self.execute('ATAL')
 
-    def set_baudrate(self, baudrate: int):
+    def set_baudrate(self, baudrate: int) -> None:
         """sets baudrate from PRESELECTED values
         Args:
             baudrate (Structs.Baudrates)
@@ -290,7 +292,7 @@ class ELM(threading.Thread):
         self.execute('ATZ')  # hard reset
         # self.reset()
 
-    def save_data_byte(self, data_byte: str):
+    def save_data_byte(self, data_byte: str) -> None:
         """it's self-explanatory"""
         self.data_byte = data_byte
-        return self.execute(f'AT SD {data_byte}')
+        self.execute(f'AT SD {data_byte}')
