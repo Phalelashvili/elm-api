@@ -1,9 +1,11 @@
 import time
-from typing import List, Union
+from typing import List, Union, Callable
 import serial
 import queue
 import logging
 import threading
+from structs import *
+
 
 logger = logging.getLogger("OBD")
 
@@ -128,17 +130,12 @@ class ELM(threading.Thread):
     # https://www.elmelectronics.com/wp-content/uploads/2016/07/ELM327DS.pdf
     # ---------------------------------------------------------------------------
 
-    def set_protocol(self, protocol) -> None:
-        """sets OBD protocol
-
-        Args:
-            protocol (int): value from structs.Protocol
-        """
+    def set_protocol(self, protocol: Protocol) -> None:
         self.execute('ATSP' + str(protocol))
         self.protocol = protocol
         self._header = None
 
-    def set_header(self, header) -> None:
+    def set_header(self, header: Union[str, int]) -> None:
         """set header for message. if header is same as previous header, skip
 
         Args:
@@ -214,13 +211,11 @@ class ELM(threading.Thread):
             return False
         return True
 
-    def monitor_all(self, callback) -> None:
+    def monitor_all(self, callback: Callable[[bytes], None]) -> None:
         """monitors/listens all protocols
         Args:
-            callback (fn): function to be called on new data
-        Callback:
-            each message received from ATMA command
-            takes single argument, passes byte encoded message
+            callback: function to be called on receiving data from ATMA command.
+            data format - byte encoded message
             separated by spaces like 123 01 02 03 04 05
             (header and msg indexes depend on protocol)
         """
